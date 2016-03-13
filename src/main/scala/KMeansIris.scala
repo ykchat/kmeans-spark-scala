@@ -34,7 +34,9 @@ object KMeansIris {
         }
         val checkdf = sqlc.createDataFrame(check, schema)
 
-        ((checkdf groupBy "target") pivot ("cluster")).count().show
+        val cross = ((checkdf groupBy "target") pivot ("cluster")).count
+        cross.show
+        cross.write json "output"
 
     }
 
