@@ -8,33 +8,31 @@ object KMeansIris {
 
     def main(args: Array[String]) {
 
-        val conf = new SparkConf() setAppName "k-means for iris"
-        val sc = new SparkContext(conf)
+        val sparkContext = SparkContext getOrCreate (new SparkConf() setAppName "k-means for iris")
 
-        val data = (sc textFile "/usr/local/share/data/iris.data").
-                    filter(_.nonEmpty).
-                    map { line =>
-                        val items = line split ","
-                        (items.last, Vectors dense items.init.map(_.toDouble))
+        val iris = (sparkContext textFile "/usr/local/share/data/iris.data")
+                    .filter(_.nonEmpty)
+                    .map { 
+                        line =>
+                            val items = line split ","
+                            (items.last, Vectors dense items.init.map(_.toDouble))
                     }
 
-        val k = 3 
-        val maxItreations = 100 
+        val clusters = KMeans.train(iris.map(_._2), 3, 100)
 
-        val clusters = KMeans.train(data.map(_._2), k, maxItreations)
-
-        val sqlc = new SQLContext(sc)
-        val schema = StructType(List(
-                            StructField("target", StringType, true),
-                            StructField("cluster", IntegerType, true)
+        val sqlContext = SQLContext getOrCreate sparkContext
+        val schema = StructType(
+                        List(
+                            StructField("target", StringType)
+                            , StructField("cluster", IntegerType)
                         ))
 
-        val check = data.map { row =>
-            Row(row._1, clusters predict row._2)
-        }
-        val checkdf = sqlc.createDataFrame(check, schema)
+        val check = sqlContext.createDataFrame(iris.map { 
+                        row =>
+                            Row(row._1, clusters predict row._2)
+                    }, schema)
 
-        val cross = ((checkdf groupBy "target") pivot ("cluster")).count
+        val cross = ((check groupBy "target") pivot "cluster").count
         cross.show
         cross.write json "output"
 
